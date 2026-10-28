@@ -60,6 +60,10 @@ namespace Roslyn.Utilities
 
         private readonly StringTable _strings;
 
+        // Experiment switch: when ROSLYN_NOINTERN_TOKENS=1 the cache is disabled: lookups always
+        // miss and adds are dropped, so every item produced through it is a fresh object.
+        private static readonly bool s_disabled = Environment.GetEnvironmentVariable("ROSLYN_NOINTERN_TOKENS") == "1";
+
         // random - used for selecting a victim in the shared cache.
         // TODO: consider whether a counter is random enough
         private Random? _random;
@@ -113,6 +117,11 @@ namespace Roslyn.Utilities
 
         internal T? FindItem(ReadOnlySpan<char> chars, int hashCode)
         {
+            if (s_disabled)
+            {
+                return null;
+            }
+
             // get direct element reference to avoid extra range checks
             ref var localSlot = ref _localTable[LocalIdxFromHash(hashCode)];
 
@@ -185,6 +194,11 @@ namespace Roslyn.Utilities
 
         internal void AddItem(ReadOnlySpan<char> chars, int hashCode, T item)
         {
+            if (s_disabled)
+            {
+                return;
+            }
+
             var text = _strings.Add(chars);
 
             // add to the shared table first (in case someone looks for same item)

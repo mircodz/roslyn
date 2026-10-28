@@ -69,6 +69,10 @@ namespace Roslyn.Utilities
         // same as above but for users that go directly with unbuffered shared cache.
         private static int s_sharedRandom = Environment.TickCount;
 
+        // Experiment switch: when ROSLYN_NOINTERN_STRINGS=1, both caches are bypassed and every
+        // Add*/AddShared* call returns a freshly allocated string (string.Empty for empty input).
+        private static readonly bool s_noIntern = Environment.GetEnvironmentVariable("ROSLYN_NOINTERN_STRINGS") == "1";
+
         internal StringTable() :
             this(null)
         {
@@ -121,6 +125,11 @@ namespace Roslyn.Utilities
 
         internal string Add(ReadOnlySpan<char> chars)
         {
+            if (s_noIntern)
+            {
+                return chars.ToString();
+            }
+
             var hashCode = Hash.GetFNVHashCode(chars);
 
             // capture array to avoid extra range checks
@@ -161,6 +170,11 @@ namespace Roslyn.Utilities
 
         internal string Add(StringBuilder chars)
         {
+            if (s_noIntern)
+            {
+                return chars.ToString();
+            }
+
             var hashCode = Hash.GetFNVHashCode(chars);
 
             // capture array to avoid extra range checks
@@ -388,6 +402,12 @@ foundIdx:
 
         internal static string AddSharedUtf8(ReadOnlySpan<byte> bytes)
         {
+            if (s_noIntern)
+            {
+                // isAscii: false decodes the bytes without adding the result to the shared table.
+                return bytes.IsEmpty ? string.Empty : AddSharedSlow(hashCode: 0, bytes, isAscii: false);
+            }
+
             int hashCode = Hash.GetFNVHashCode(bytes, out bool isAscii);
 
             if (isAscii)
